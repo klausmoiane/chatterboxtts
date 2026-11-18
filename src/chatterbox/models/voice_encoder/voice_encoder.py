@@ -149,7 +149,8 @@ class VoiceEncoder(nn.Module):
             raise Exception(f"Mels outside [0, 1]. Min={mels.min()}, Max={mels.max()}")
 
         # Pass the input through the LSTM layers
-        _, (hidden, _) = self.lstm(mels)
+        # Cast to float32 — newer librosa/numpy versions may produce float64 tensors
+        _, (hidden, _) = self.lstm(mels.float())
 
         # Project the final hidden state
         raw_embeds = self.proj(hidden[-1])

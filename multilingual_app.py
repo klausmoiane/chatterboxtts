@@ -1,8 +1,18 @@
+import sys
 import random
 import os
 import numpy as np
 import torch
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8")
+
 from chatterbox.mtl_tts import ChatterboxMultilingualTTS, SUPPORTED_LANGUAGES
+from chatterbox.text_preprocessor import split_into_chunks
+from voice_templates.preset_manager import list_presets, get_preset_names, load_preset
+from narrator_pt_pipeline import crossfade_concat
 import gradio as gr
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -10,8 +20,10 @@ T3_MODEL = os.getenv("CHATTERBOX_MULTILINGUAL_T3_MODEL", "v2")
 print(f"🚀 Running on device: {DEVICE}")
 print(f"Using multilingual T3 model: {T3_MODEL}")
 
+
 # --- Global Model Initialization ---
 MODEL = None
+
 
 LANGUAGE_CONFIG = {
     "ar": {
@@ -230,20 +242,45 @@ def generate_tts_audio(
         print(f"Using audio prompt: {chosen_prompt}")
     else:
         print("No audio prompt provided; using default voice.")
-        
-    wav = current_model.generate(
-        text_input[:300],  # Truncate text to max chars
-        language_id=language_id,
-        **generate_kwargs
-    )
-    print("Audio generation complete.")
-    return (current_model.sr, wav.squeeze(0).numpy())
+    # Se o texto for longo (> 280 caracteres), sintetiza em chunks e concatena com crossfade
+    max_c = 280
+    chunks = split_into_chunks(text_input, max_chars=max_c, language_id=language_id)
+    if not chunks:
+        chunks = [text_input[:300]]
 
-with gr.Blocks() as demo:
+    # Se for apenas 1 chunk curto, gera diretamente
+    if len(chunks) == 1:
+        wav = current_model.generate(
+            chunks[0],
+            language_id=language_id,
+            **generate_kwargs
+        )
+        print("Audio generation complete (single chunk).")
+        return (current_model.sr, wav.squeeze(0).numpy())
+
+    # Se forem múltiplos chunks, gera com variação de seed e crossfade suave
+    print(f"Generating audio in {len(chunks)} chunks with crossfade...")
+    wav_list = []
+    base_s = int(seed_num_input)
+    for idx, c in enumerate(chunks):
+        if base_s != 0:
+            set_seed(base_s + idx)
+        w = current_model.generate(
+            c,
+            language_id=language_id,
+            **generate_kwargs
+        )
+        wav_list.append(w.squeeze(0).numpy())
+
+    full_wav = crossfade_concat(wav_list, sr=current_model.sr, crossfade_ms=50)
+    print("Audio generation complete (multi-chunk crossfade).")
+    return (current_model.sr, full_wav)
+
+with gr.Blocks(title="Chatterbox Multilingual Studio") as demo:
     gr.Markdown(
         """
-        # Chatterbox Multilingual Demo
-        Generate high-quality multilingual speech from text with reference audio styling, supporting 23 languages.
+        # 🎙️ Chatterbox Multilingual Studio
+        Gere áudios de alta fidelidade com referência e estilos customizados. Suporta **23 idiomas** e textos longos com **divisão automática em chunks**.
         """
     )
     
@@ -251,11 +288,24 @@ with gr.Blocks() as demo:
     gr.Markdown(get_supported_languages_display())
     with gr.Row():
         with gr.Column():
-            initial_lang = "fr"
+            with gr.Group():
+                gr.Markdown("### 👤 Selecionar Personagem / Preset")
+                preset_dropdown = gr.Dropdown(
+                    choices=["(Nenhum - Personalizado)"] + get_preset_names(),
+                    value="Narrator PT (Documentary)" if "Narrator PT (Documentary)" in get_preset_names() else "(Nenhum - Personalizado)",
+                    label="Personagens Salvos",
+                    info="Selecione um personagem para carregar configurações de voz pré-definidas"
+                )
+                preset_info = gr.Markdown(
+                    value="*Personagem selecionado: Narrador documentário em português (voz Filipe)*" if "Narrator PT (Documentary)" in get_preset_names() else "*Nenhum personagem selecionado.*"
+                )
+
+            initial_lang = "pt" if "Narrator PT (Documentary)" in get_preset_names() else "fr"
             text = gr.Textbox(
                 value=default_text_for_ui(initial_lang),
-                label="Text to synthesize (max chars 300)",
-                max_lines=5
+                label="Texto para narração / síntese (suporta textos longos com chunks automáticos)",
+                max_lines=7,
+                lines=5
             )
             
             language_id = gr.Dropdown(
@@ -265,11 +315,17 @@ with gr.Blocks() as demo:
                 info="Select the language for text-to-speech synthesis"
             )
             
+            init_ref_audio = default_audio_for_ui(initial_lang)
+            if "Narrator PT (Documentary)" in get_preset_names():
+                pt_p = load_preset("Narrator PT (Documentary)")
+                if pt_p and pt_p.get("audio_ref"):
+                    init_ref_audio = pt_p.get("audio_ref")
+
             ref_wav = gr.Audio(
                 sources=["upload", "microphone"],
                 type="filepath",
                 label="Reference Audio File (Optional)",
-                value=default_audio_for_ui(initial_lang)
+                value=init_ref_audio
             )
             
             gr.Markdown(
@@ -278,20 +334,55 @@ with gr.Blocks() as demo:
             )
             
             exaggeration = gr.Slider(
-                0.25, 2, step=.05, label="Exaggeration (Neutral = 0.5, extreme values can be unstable)", value=.5
+                0.25, 2, step=.05, label="Exaggeration (Neutral = 0.5, natural/documentário = 0.35)", value=0.35 if initial_lang == "pt" else 0.5
             )
             cfg_weight = gr.Slider(
-                0.2, 1, step=.05, label="CFG/Pace", value=0.5
+                0.2, 1, step=.05, label="CFG/Pace", value=0.65 if initial_lang == "pt" else 0.5
             )
 
             with gr.Accordion("More options", open=False):
-                seed_num = gr.Number(value=0, label="Random seed (0 for random)")
-                temp = gr.Slider(0.05, 5, step=.05, label="Temperature", value=.8)
+                seed_num = gr.Number(value=42 if initial_lang == "pt" else 0, label="Random seed (0 for random)")
+                temp = gr.Slider(0.05, 5, step=.05, label="Temperature", value=0.70 if initial_lang == "pt" else 0.8)
 
-            run_btn = gr.Button("Generate", variant="primary")
+            run_btn = gr.Button("⚡ Gerar Áudio / Narração", variant="primary")
 
         with gr.Column():
             audio_output = gr.Audio(label="Output Audio")
+
+        def on_preset_change(preset_name):
+            if not preset_name or preset_name == "(Nenhum - Personalizado)":
+                return (
+                    "*Nenhum preset ativo. Usando valores manuais.*",
+                    gr.update(), # ref_wav
+                    gr.update(), # lang
+                    0.5,         # exagg
+                    0.5,         # cfg
+                    0,           # seed
+                    0.8          # temp
+                )
+            p_data = load_preset(preset_name)
+            if not p_data:
+                return ("*Erro ao carregar preset.*", gr.update(), gr.update(), 0.5, 0.5, 0, 0.8)
+
+            desc = f"**{p_data.get('name')}**: {p_data.get('description', '')}"
+            audio_ref = p_data.get("audio_ref")
+            lang = p_data.get("language_id", "pt")
+            params = p_data.get("params", {})
+            return (
+                desc,
+                audio_ref,
+                lang,
+                params.get("exaggeration", 0.35),
+                params.get("cfg_weight", 0.65),
+                params.get("seed", 42),
+                params.get("temperature", 0.70)
+            )
+
+        preset_dropdown.change(
+            fn=on_preset_change,
+            inputs=[preset_dropdown],
+            outputs=[preset_info, ref_wav, language_id, exaggeration, cfg_weight, seed_num, temp]
+        )
 
         def on_language_change(lang, current_ref, current_text):
             return default_audio_for_ui(lang), default_text_for_ui(lang)
@@ -317,4 +408,5 @@ with gr.Blocks() as demo:
         outputs=[audio_output],
     )
 
-demo.launch(mcp_server=True)
+demo.launch(server_name="127.0.0.1", server_port=7860, mcp_server=True)
+

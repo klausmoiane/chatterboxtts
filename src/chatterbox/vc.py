@@ -95,10 +95,48 @@ class ChatterboxVC:
             audio_16 = torch.from_numpy(audio_16).float().to(self.device)[None, ]
 
             s3_tokens, _ = self.s3gen.tokenizer(audio_16)
-            wav, _ = self.s3gen.inference(
-                speech_tokens=s3_tokens,
-                ref_dict=self.ref_dict,
-            )
-            wav = wav.squeeze(0).detach().cpu().numpy()
+            
+            chunk_size = 250  # 10 seconds of speech tokens
+            overlap = 25      # 1 second of overlap on each side
+            num_tokens = s3_tokens.shape[-1]
+            
+            if num_tokens <= chunk_size:
+                wav, _ = self.s3gen.inference(
+                    speech_tokens=s3_tokens,
+                    ref_dict=self.ref_dict,
+                )
+                wav = wav.squeeze(0)
+            else:
+                import math
+                wav_pieces = []
+                # Samples per token: S3GEN_SR // S3_TOKEN_RATE = 24000 // 25 = 960
+                samples_per_token = 960
+                
+                for j in range(math.ceil(num_tokens / chunk_size)):
+                    start_token = j * chunk_size
+                    end_token = min((j + 1) * chunk_size, num_tokens)
+                    
+                    start_idx = max(0, start_token - overlap)
+                    end_idx = min(num_tokens, end_token + overlap)
+                    
+                    chunk_tokens = s3_tokens[:, start_idx:end_idx]
+                    chunk_wav, _ = self.s3gen.inference(
+                        speech_tokens=chunk_tokens,
+                        ref_dict=self.ref_dict,
+                    )
+                    chunk_wav = chunk_wav.squeeze(0)
+                    
+                    crop_start_sample = (start_token - start_idx) * samples_per_token
+                    
+                    if end_token == num_tokens:
+                        piece = chunk_wav[crop_start_sample:]
+                    else:
+                        crop_end_sample = crop_start_sample + (end_token - start_token) * samples_per_token
+                        piece = chunk_wav[crop_start_sample:crop_end_sample]
+                        
+                    wav_pieces.append(piece)
+                wav = torch.cat(wav_pieces, dim=0)
+
+            wav = wav.detach().cpu().numpy()
             watermarked_wav = self.watermarker.apply_watermark(wav, sample_rate=self.sr)
         return torch.from_numpy(watermarked_wav).unsqueeze(0)

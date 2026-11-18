@@ -1,0 +1,21 @@
+{
+  "id": "klausmultiuso/local-gpu",
+  "id_no": 142337081,
+  "title": "Local Gpu",
+  "code_file": "local-gpu.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "keywords": ["tts", "chatterbox", "voice-cloning", "gpu", "narration"],
+  "dataset_sources": [
+    "klausmultiuso/chatterbox-voice-refs"
+  ],
+  "kernel_sources": [],
+  "competition_sources": [],
+  "model_sources": [],
+  "docker_image": "",
+  "machine_shape": "VIRTUAL_MACHINE"
+}

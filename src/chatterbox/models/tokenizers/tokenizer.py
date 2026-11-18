@@ -296,6 +296,12 @@ class MTLTokenizer:
             txt = korean_normalize(txt)
         elif language_id == 'ru':
             txt = add_russian_stress(txt)
+        elif language_id == 'pt':
+            try:
+                from ...pt_pronunciation import apply_pt_pronunciation
+            except (ImportError, ValueError):
+                from chatterbox.pt_pronunciation import apply_pt_pronunciation
+            txt = apply_pt_pronunciation(txt)
         
         # Prepend language token
         if language_id:

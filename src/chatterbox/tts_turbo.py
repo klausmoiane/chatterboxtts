@@ -44,7 +44,6 @@ def punc_norm(text: str) -> str:
     # Replace uncommon/llm punc
     punc_to_replace = [
         ("…", ", "),
-        (":", ","),
         ("—", "-"),
         ("–", "-"),
         (" ,", ","),
@@ -55,6 +54,10 @@ def punc_norm(text: str) -> str:
     ]
     for old_char_sequence, new_char in punc_to_replace:
         text = text.replace(old_char_sequence, new_char)
+
+    # Replace colon with comma only when not between digits (e.g. preserve 8:00, 10:30)
+    import re
+    text = re.sub(r'(?<!\d):(x?!\d)', ', ', text)
 
     # Add full stop if no ending punc
     text = text.rstrip(" ")
@@ -192,6 +195,12 @@ class ChatterboxTurboTTS:
                 print("MPS not available because the current MacOS version is not 12.3+ and/or you do not have an MPS-enabled device on this machine.")
             device = "cpu"
 
+        # Check if local model_weights directory exists with required files
+        local_dir = Path("model_weights")
+        if local_dir.exists() and (local_dir / "t3_turbo_v1.safetensors").exists():
+            print("Loading Chatterbox-Turbo from local directory 'model_weights'...")
+            return cls.from_local(local_dir, device)
+
         local_path = snapshot_download(
             repo_id=REPO_ID,
             token=os.getenv("HF_TOKEN") or None,
@@ -214,7 +223,7 @@ class ChatterboxTurboTTS:
 
         return wav
 
-    def prepare_conditionals(self, wav_fpath, exaggeration=0.5, norm_loudness=True):
+    def prepare_conditionals(self, wav_fpath, exaggeration=0.0, norm_loudness=True):
         ## Load and norm reference wav
         s3gen_ref_wav, _sr = librosa.load(wav_fpath, sr=S3GEN_SR)
 
@@ -257,14 +266,17 @@ class ChatterboxTurboTTS:
         temperature=0.8,
         top_k=1000,
         norm_loudness=True,
+        n_cfm_timesteps=4,
     ):
         if audio_prompt_path:
             self.prepare_conditionals(audio_prompt_path, exaggeration=exaggeration, norm_loudness=norm_loudness)
         else:
             assert self.conds is not None, "Please `prepare_conditionals` first or specify `audio_prompt_path`"
 
-        if cfg_weight > 0.0 or exaggeration > 0.0 or min_p > 0.0:
-            logger.warning("CFG, min_p and exaggeration are not supported by Turbo version and will be ignored.")
+        # Ignorar parâmetros não suportados pela versão Turbo sem poluir o log
+        cfg_weight = 0.0
+        exaggeration = 0.0
+        min_p = 0.0
 
         # Norm and tokenize text
         text = punc_norm(text)
@@ -289,7 +301,7 @@ class ChatterboxTurboTTS:
         wav, _ = self.s3gen.inference(
             speech_tokens=speech_tokens,
             ref_dict=self.conds.gen,
-            n_cfm_timesteps=2,
+            n_cfm_timesteps=n_cfm_timesteps,
         )
         wav = wav.squeeze(0).detach().cpu().numpy()
         watermarked_wav = self.watermarker.apply_watermark(wav, sample_rate=self.sr)

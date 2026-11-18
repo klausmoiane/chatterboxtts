@@ -1,0 +1,19 @@
+{
+  "name": "Narrator EN (Documentary)",
+  "description": "Narrador documentário — voz clonada do episódio 'Why Putin Is So Hard to Kill' (segmento 02:43–03:12). Referência de áudio guardada em audio_ref.",
+  "audio_ref": "C:\\Users\\klaus\\OneDrive\\Desktop\\DEV\\SIDE PROJECTS\\YOUTUBE\\tts\\Why Putin Is So Hard to Kill.mp3",
+  "audio_ref_start_sec": 163,
+  "audio_ref_end_sec": 192,
+  "conds_pt": null,
+  "params": {
+    "temperature": 0.7,
+    "repetition_penalty": 1.15,
+    "top_p": 0.90,
+    "min_p": 0.0,
+    "top_k": 300,
+    "seed": 42,
+    "norm_loudness": true,
+    "n_cfm_timesteps": 6,
+    "max_chars_per_chunk": 200
+  }
+}

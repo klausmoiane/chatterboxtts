@@ -1,0 +1,16 @@
+{
+  "id": "narrator_en",
+  "name": "🎙️ Narrador Documental EN",
+  "description": "Voz clonada a partir do trecho 02:43–03:12 do vídeo 'Why Putin Is So Hard to Kill'. Tom sério, ritmo médio, sotaque neutro americano. Ideal para documentários e narração jornalística.",
+  "language": "en",
+  "ref_audio": "C:\\Users\\klaus\\OneDrive\\Desktop\\DEV\\SIDE PROJECTS\\YOUTUBE\\tts\\kaggle_runner\\dataset_voice\\reference_narrator_en.wav",
+  "temperature": 0.75,
+  "repetition_penalty": 1.1,
+  "seed": 42,
+  "tags": [
+    "documentary",
+    "english",
+    "cloned"
+  ],
+  "notes": "Referência: Why Putin Is So Hard to Kill — Mr. Science"
+}

@@ -46,3 +46,36 @@ checkpoints/
 
 # Ignore generated sample .wav files
 **/*.wav
+
+# Audio files
+*.mp3
+*.ogg
+*.flac
+
+# Kaggle credentials and logs
+kaggle.json
+*.log
+
+# Node modules and frontend
+node_modules/
+package-lock.json
+
+# Output directories
+outputs/
+scratch/
+model_weights/
+
+# Python cache
+.pytest_cache/
+.mypy_cache/
+
+# IDEs
+.idea/
+.qodo/
+
+# Temporary files
+audio*.wav
+*.tmp
+
+# Nested repos (logs)
+kaggle_runner/logs/

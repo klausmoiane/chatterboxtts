@@ -87,7 +87,6 @@ def punc_norm(text: str) -> str:
     punc_to_replace = [
         ("...", ", "),
         ("…", ", "),
-        (":", ","),
         (" - ", ", "),
         (";", ", "),
         ("—", "-"),
@@ -100,6 +99,10 @@ def punc_norm(text: str) -> str:
     ]
     for old_char_sequence, new_char in punc_to_replace:
         text = text.replace(old_char_sequence, new_char)
+
+    # Replace colon with comma only when not between digits (e.g. preserve 8:00, 10:30)
+    import re
+    text = re.sub(r'(?<!\d):(x?!\d)', ', ', text)
 
     # Add full stop if no ending punc
     text = text.rstrip(" ")

@@ -1,0 +1,14 @@
+{
+  "name": "Narrator PT (Documentary)",
+  "description": "Voz em português com alta energia e ritmo natural para canal Gaming no YouTube — clonada de 'voice_preview_filipe -.mp3'. Sem tom de leitura de roteiro ou novela.",
+  "audio_ref": "C:\\Users\\klaus\\OneDrive\\Desktop\\DEV\\SIDE PROJECTS\\YOUTUBE\\tts\\voice_preview_filipe -.mp3",
+  "conds_pt": null,
+  "language_id": "pt",
+  "params": {
+    "exaggeration": 0.55,
+    "temperature": 0.85,
+    "cfg_weight": 0.60,
+    "seed": 42,
+    "max_chars_per_chunk": 220
+  }
+}
